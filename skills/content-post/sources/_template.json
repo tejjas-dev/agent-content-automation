@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "id": "mysite",
+  "type": "drama",
+  "order": 30,
+  "entry_urls": ["https://example.com/"],
+  "fetch": {"search_tier": "http", "detail_tier": "http", "wait_selector": ""},
+  "search": {"mode": "template", "path": "/?s={query}"},
+  "listing": {"card": "article.post", "link": "a[href]", "title": "h2"},
+  "detail": {
+    "title": {"meta": ["og:title"], "css": ["h1.entry-title"]},
+    "poster": {"meta": ["og:image"], "css": [".entry-content img"]},
+    "fields": {
+      "audio": {"css": [], "label": "audio|language"},
+      "episodes": {"css": [], "label": "episodes?"},
+      "genre": {"css": [], "label": "genres?"}
+    },
+    "links": {"container": ".entry-content", "css": ["a[href]"]}
+  },
+  "title_noise": ["site name here"]
+}

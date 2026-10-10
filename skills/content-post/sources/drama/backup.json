@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "id": "backup",
+  "type": "drama",
+  "order": 20,
+  "entry_urls": ["https://katdrama.org/"],
+  "fetch": {"search_tier": "http", "detail_tier": "http"},
+  "search": {"mode": "auto"}
+}

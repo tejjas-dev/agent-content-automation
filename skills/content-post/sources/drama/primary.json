@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "id": "primary",
+  "type": "drama",
+  "order": 10,
+  "entry_urls": ["https://katworld.net/?type=KatDrama"],
+  "fetch": {"search_tier": "dynamic", "detail_tier": "http"},
+  "search": {"mode": "template", "path": "/?q={query}"}
+}
