@@ -22,6 +22,11 @@ def norm(s):
     return re.sub(r"\s+", " ", s.replace("[", "(").replace("]", ")")).strip()
 
 
+def same_label(got, want):
+    got = norm(got)
+    return got == want or (got.endswith("…") and want.startswith(got[:-1]))
+
+
 def squash(s):
     return re.sub(r"\W+", "", s.lower())
 
@@ -64,14 +69,14 @@ def run(task, title, typ="drama"):
                 errs.append(f"{tag}: bad link line: {l[:50]}")
             elif m.group(2) not in want:
                 errs.append(f"{tag}: link {m.group(2)} is not in short.json")
-            elif norm(m.group(1)) != want[m.group(2)]:
+            elif not same_label(m.group(1), want[m.group(2)]):
                 errs.append(f"{tag}: label '{m.group(1)[:30]}' is attached to the wrong link {m.group(2)}")
             else:
                 used.append(m.group(2))
         head = [l.strip() for l in lines[: next((i for i, l in enumerate(lines) if l.startswith("📁")), len(lines))] if l.strip()]
         heads.append(tuple(head))
         counts.append(len(links))
-        exp = [f"{h} : {data[k]}" for k, h in HEADERS[typ] if data.get(k)]
+        exp = [f"{h} : {norm(str(data[k]))}" for k, h in HEADERS[typ] if data.get(k)]
         if head != exp:
             errs.append(f"{tag}: header does not match data.json (expected {len(exp)} lines)")
         if t.count("\n\n") < len(links) + 1:

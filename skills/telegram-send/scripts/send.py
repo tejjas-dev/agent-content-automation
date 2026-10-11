@@ -21,6 +21,22 @@ PERMANENT = ("chat not found", "not enough rights", "bot is not a member", "bot 
 TYPES = {"image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp"}
 
 
+def data_dir():
+    e = os.environ.get("DEVX_DATA_DIR")
+    if e:
+        return e
+    return "/workspace" if os.path.isdir("/workspace") and os.access("/workspace", os.W_OK) else os.path.join(os.path.expanduser("~"), ".devx-content")
+
+
+def state_dir(task):
+    """<root>/state next to <root>/work/<task>; the ledger must outlive the daily cleanup of work/."""
+    parent = os.path.dirname(os.path.realpath(task))
+    root = os.path.dirname(parent) if os.path.basename(parent) == "work" else os.path.join(data_dir(), "drama")
+    d = os.path.join(root, "state")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 def redact(s):
     t = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     return str(s).replace(t, "***") if t else str(s)
@@ -102,9 +118,7 @@ def main(argv=None):
     if bad:
         print(f"ERROR: caption {bad} longer than Telegram's 1024 limit")
         return 2
-    data_dir = os.environ.get("DEVX_DATA_DIR") or os.path.join(os.path.expanduser("~"), ".devx-content")
-    os.makedirs(data_dir, exist_ok=True)
-    ledger = os.path.join(data_dir, "posted.jsonl")
+    ledger = os.path.join(state_dir(a.task), "posted.jsonl")
     key = re.sub(r"[^a-z0-9]+", "", title.lower())
     done = set()
     if os.path.exists(ledger) and not a.force:

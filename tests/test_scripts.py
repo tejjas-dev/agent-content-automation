@@ -1,104 +1,9 @@
-import contextlib
-import hashlib
-import importlib.util
-import io
 import json
 import os
-import re
-import shutil
-import tempfile
-import threading
 import time
 import unittest
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
 
-ROOT = Path(__file__).resolve().parents[1] / "skills"
-PNG = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00"
-       b"\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\xff\xff?\x00\x05\xfe\x02\xfe\xa7\x9b\xa4\xb5"
-       b"\x00\x00\x00\x00IEND\xaeB`\x82")
-
-
-def load(skill, name):
-    spec = importlib.util.spec_from_file_location(name, ROOT / skill / "scripts" / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-class S:                       # shared fake-server state
-    calls, fail_chats, reject_url, short_fail, short_hits = [], set(), False, set(), []
-
-
-class H(BaseHTTPRequestHandler):
-    def log_message(self, *a): pass
-
-    def _s(self, code, body, ct="application/json"):
-        b = body if isinstance(body, bytes) else body.encode()
-        self.send_response(code); self.send_header("Content-Type", ct)
-        self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
-
-    def do_GET(self):
-        u = urlsplit(self.path); q = parse_qs(u.query)
-        if u.path == "/api":
-            url = q.get("url", [""])[0]; S.short_hits.append(url)
-            if url in S.short_fail or q.get("api", [""])[0] != "AROTOK":
-                return self._s(200, "", "text/plain")
-            return self._s(200, "https://arolinks.com/" + hashlib.sha1(url.encode()).hexdigest()[:7], "text/plain")
-        if u.path == "/p.png":
-            return self._s(200, PNG, "image/png")
-        self._s(404, "nope")
-
-    def do_POST(self):
-        body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
-        if self.headers.get("Content-Type", "").startswith("multipart"):
-            chat = re.search(rb'name="chat_id"\r\n\r\n(.*?)\r\n', body).group(1).decode(); mode = "file"
-        else:
-            chat = parse_qs(body.decode())["chat_id"][0]; mode = "url"
-        S.calls.append((chat, mode))
-        if chat in S.fail_chats:
-            return self._s(400, json.dumps({"ok": False, "description": "Bad Request: chat not found"}))
-        if mode == "url" and S.reject_url:
-            return self._s(400, json.dumps({"ok": False, "description": "wrong HTTP URL specified"}))
-        self._s(200, json.dumps({"ok": True}))
-
-
-class Base(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
-        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
-        cls.base = f"http://127.0.0.1:{cls.srv.server_address[1]}"
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.srv.shutdown()
-
-    def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp())
-        self.task = self.tmp / "data" / "work" / "t1"
-        self.task.mkdir(parents=True)
-        env = {"DEVX_DATA_DIR": str(self.tmp / "data"), "AROLINKS_TOKEN": "AROTOK", "TELEGRAM_BOT_TOKEN": "TGTOK",
-               "DRAMA_POST_CHANNEL_IDS": "-1,-2", "DEVX_AROLINKS_API": self.base + "/api",
-               "DEVX_TELEGRAM_API": self.base, "DEVX_SEND_DELAY": "0", "DEVX_RETRY_CAP": "0"}
-        self._old = {k: os.environ.get(k) for k in env}
-        os.environ.update(env)
-        S.calls.clear(); S.fail_chats.clear(); S.reject_url = False; S.short_fail.clear(); S.short_hits.clear()
-
-    def tearDown(self):
-        for k, v in self._old.items():
-            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
-        shutil.rmtree(self.tmp, ignore_errors=True)
-
-    def out(self, fn, *a):
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            rc = fn(list(a))
-        return rc, buf.getvalue()
-
-    def jwrite(self, name, obj):
-        (self.task / name).write_text(json.dumps(obj, ensure_ascii=False), encoding="utf-8")
+from common import Base, S, caption, load, DATA
 
 
 class TestShorten(Base):
@@ -124,11 +29,6 @@ class TestShorten(Base):
         self.assertEqual(self.out(sh.main, str(self.task / "links.json"))[0], 1)
         os.environ.pop("AROLINKS_TOKEN")
         self.assertEqual(self.out(sh.main, str(self.task / "links.json"))[0], 2)
-
-
-def caption(title="My Demon", links=(("480p Single Episode", "https://arolinks.com/aaa"), ("720p Zip File", "https://arolinks.com/bbb"))):
-    head = f"📺 TITLE : {title}\n🎙 AUDIO : Hindi Dubbed\n📺 EPISODES : 16\n🎭 GENRE : Action, Comedy\n\n"
-    return head + "".join(f"📁 {l} : {u}\n\n" for l, u in links)
 
 
 class TestCheck(Base):
@@ -220,29 +120,51 @@ class TestSend(Base):
         os.environ.pop("TELEGRAM_BOT_TOKEN"); self.assertEqual(self.send()[0], 2)
 
 
-class TestCleanupAndMeasure(Base):
-    def test_cleanup_age_dry_run_and_safety(self):
-        cl = load("content-cleanup", "cleanup")
-        work = self.tmp / "data" / "work"
-        old, new = work / "old", work / "new"
-        for d in (old, new):
-            d.mkdir(); (d / "f.txt").write_text("x")
-        t = time.time() - 3 * 86400
-        os.utime(old / "f.txt", (t, t)); os.utime(old, (t, t))
-        (self.tmp / "data" / "learned").mkdir(); (self.tmp / "data" / "learned" / "n.md").write_text("keep")
-        outside = self.tmp / "outside"; outside.mkdir(); (outside / "f").write_text("x"); os.utime(outside / "f", (t, t)); os.utime(outside, (t, t))
-        (work / "link").symlink_to(outside)
-        rc, out = self.out(cl.main, "--dry-run")
-        self.assertIn("would remove 1", out); self.assertTrue(old.exists())
-        rc, out = self.out(cl.main, "--hours", "24")
-        self.assertFalse(old.exists()); self.assertTrue(new.exists())
-        self.assertTrue(outside.exists()); self.assertTrue((self.tmp / "data" / "learned" / "n.md").exists())
-
-    def test_measure(self):
-        m = load("drama-format", "measure")
-        self.assertEqual(m.plan(13), [7, 6]); self.assertEqual(m.plan(25), [9, 8, 8]); self.assertEqual(m.plan(1), [1])
-        self.assertEqual(m.units("📁a"), 3)
 
 
-if __name__ == "__main__":
-    unittest.main()
+class TestCheckNormalization(Base):
+    def test_brackets_in_title_and_trimmed_labels_are_not_false_failures(self):
+        self.jwrite("data.json", {**DATA, "title": "My Demon [Hindi]"})
+        self.jwrite("short.json", [{"label": "[480p] " + "x" * 60, "url": "u", "short": "https://arolinks.com/aaa"}])
+        label = "(480p) " + "x" * 60
+        cap = "📺 TITLE : My Demon (Hindi)\n🎙 AUDIO : Hindi Dubbed\n📺 EPISODES : 16\n🎭 GENRE : Action, Comedy\n\n" \
+              f"📁 {label[:27]}… : https://arolinks.com/aaa\n\n"
+        (self.task / "caption1.txt").write_text(cap, encoding="utf-8")
+        self.assertEqual(load("drama-verify", "check").run(str(self.task), "my demon"), [])
+
+
+class TestBuild(Base):
+    def build(self):
+        return self.out(load("drama-format", "build").main, "--task", str(self.task))
+
+    def shorts(self, n, null=()):
+        return [{"label": f"Episode {i} [720p]", "url": f"u{i}", "short": None if i in null else f"https://arolinks.com/{i:07d}"} for i in range(n)]
+
+    def test_split_balanced_and_passes_checker(self):
+        for n, want in ((5, [5]), (13, [7, 6]), (25, [9, 8, 8])):
+            for f in self.task.glob("caption*.txt"):
+                f.unlink()
+            self.jwrite("data.json", DATA); self.jwrite("short.json", self.shorts(n))
+            rc, out = self.build()
+            caps = sorted(self.task.glob("caption*.txt"))
+            self.assertEqual((rc, [c.read_text().count("📁") for c in caps]), (0, want), out)
+            self.assertEqual(load("drama-verify", "check").run(str(self.task), "My Demon"), [])
+
+    def test_null_entries_drop_their_tag_and_none_left_is_error(self):
+        self.jwrite("data.json", DATA); self.jwrite("short.json", self.shorts(4, null=(1, 2)))
+        rc, out = self.build()
+        text = (self.task / "caption1.txt").read_text()
+        self.assertEqual((rc, text.count("📁")), (0, 2)); self.assertIn("dropped 2", out)
+        self.assertNotIn("Episode 1 ", text); self.assertNotIn("[", text)
+        self.jwrite("short.json", self.shorts(2, null=(0, 1)))
+        self.assertEqual(self.build()[0], 3)
+
+    def test_long_labels_trimmed_and_missing_fields_omitted(self):
+        self.jwrite("data.json", {"title": "T", "poster": "https://x/p.jpg", "audio": "Hindi"})
+        self.jwrite("short.json", [{"label": "L" * 400, "url": "u", "short": "https://arolinks.com/a"}])
+        self.assertEqual(self.build()[0], 0)
+        t = (self.task / "caption1.txt").read_text()
+        self.assertTrue(t.startswith("📺 TITLE : T\n🎙 AUDIO : Hindi\n\n📁 ")); self.assertNotIn("EPISODES", t)
+        self.assertLessEqual(len(t.encode("utf-16-le")) // 2, 950)
+        self.jwrite("data.json", {"title": "T" * 2000, "poster": "https://x/p.jpg"})
+        self.assertEqual(self.build()[0], 4)

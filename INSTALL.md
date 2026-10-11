@@ -16,10 +16,16 @@ Update for the `install.sh` route: `git pull && ./install.sh <agent>`. Use `--li
 
 ## First run (inside the environment where the agent runs commands, e.g. the Docker container)
 ```sh
-sh skills/drama-post/scripts/setup.sh                 # Scrapling + browsers, once (idempotent)
+sh skills/drama-post/scripts/setup.sh                 # Scrapling + browsers, once (idempotent; an old venv is reused)
 python3 skills/drama-post/scripts/doctor.py --net     # env, deps, bot, channels
 ```
-Then tell the agent: "my demon drama post kar".
+Optional env: `DEVX_NOTIFY_CHAT_ID` = your Telegram user id (press /start on the bot once) for private alerts such as "domain changed".
+Then tell the agent: "my demon drama post kar". Several messages at once are queued and processed one by one.
 
-## Cleanup (cron, no AI)
-`0 4 * * * python3 <skills>/content-cleanup/scripts/cleanup.py --hours 24` - or Hermes dashboard -> Cron.
+## Upgrading from 0.2.x
+`hermes plugins update devx-content` (or `git pull && ./install.sh <agent>`). The first `drama.py env` copies your old
+`learned/*.md` and `posted.jsonl` into `<DATA>/drama/state/` automatically.
+
+## Daily cleanup (cron, no AI)
+`0 4 * * * python3 <skills>/content-cleanup/scripts/cleanup.py` - or Hermes dashboard -> Cron with the prompt "run the content-cleanup skill".
+Removes everything under `<DATA>/drama/` older than 6 h except `state/`.

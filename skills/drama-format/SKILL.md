@@ -1,15 +1,15 @@
 ---
 name: drama-format
 description: >-
-  Build the final Telegram caption text (locked layout, simple direct links, proper spacing, split
-  into balanced posts) from data.json and short.json. Used by drama-post after link-short.
+  Build the final Telegram caption text (locked layout, simple direct links, proper spacing, balanced
+  split into posts) from data.json and short.json with a script. Normally run by publish.py; open this
+  skill only when publish.py reports a build problem.
 ---
 
 # drama-format
 
-Input `$TASK/data.json` + `$TASK/short.json`. Output `$TASK/caption1.txt`, `caption2.txt`, ... (plain text: no bold/italic/code, no buttons, no JSON).
-
-## Layout (exact)
+`python3 $SK/drama-format/scripts/build.py --task "$TASK"` writes `caption1.txt`, `caption2.txt`, ... (publish.py runs it for you).
+It reads `data.json` + `short.json` and applies the locked layout (plain text, no bold/italic/code, no buttons):
 ```
 📺 TITLE : <title>
 🎙 AUDIO : <audio>
@@ -21,9 +21,8 @@ Input `$TASK/data.json` + `$TASK/short.json`. Output `$TASK/caption1.txt`, `capt
 📁 <label> : <short-URL>
 
 ```
-- Header values come only from `data.json`; omit a header line when its value is missing. Never add or reword values.
-- Use only entries whose `short` is not null, in the original order, each `label` with its own `short`. A null entry loses its tag. No entries left -> `Links short nahi ho paye.`, stop.
-- Replace `[` `]` in labels with `(` `)`. Blank line after the header and after EVERY link.
-- Max 12 links per post and <= 950 UTF-16 units per caption (emoji count 2). Fewest posts, then balanced (differ by at most 1, original order). Get the split from the script: `python3 scripts/measure.py plan <N>` (13 -> `7 6`).
-- Every post repeats the same header; no "Part" labels; same poster for all.
-- Measure each file: `python3 scripts/measure.py "$TASK"/caption*.txt`. Over 950 -> split into one more post and rebuild. If header + one link cannot fit -> `Post format nahi ban paya: header bahut lamba hai.`
+- Header values only from `data.json` (missing value = line omitted). Entries with `short = null` lose their tag; none left -> `Links short nahi ho paye.`
+- `[` `]` become `(` `)`. Blank line after the header and after every link. Max 12 links and <= 950 UTF-16 units per post, fewest posts, balanced (13 -> 7+6). Long labels are trimmed only when needed.
+- Exit 3 = no links, 4 = header too long (`Post format nahi ban paya: header bahut lamba hai.`).
+- Helpers: `scripts/measure.py plan <N>` (split sizes), `scripts/measure.py FILE...` (UTF-16 units).
+- If build.py itself breaks, fix it minimally (stdlib only), tell the user, suggest committing.
