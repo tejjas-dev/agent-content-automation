@@ -1,0 +1,11 @@
+name: devx-content
+version: 0.2.0
+description: AI-driven content posting skills (drama now, movie/anime later) - find, scrape, shorten links, format, verify and send posts to Telegram.
+author: DevelX
+requires_env:
+  - name: AROLINKS_TOKEN
+    description: AroLinks API token (AroLinks dashboard -> API)
+  - name: TELEGRAM_BOT_TOKEN
+    description: Telegram bot token from BotFather (the bot must be admin in every channel)
+  - name: DRAMA_POST_CHANNEL_IDS
+    description: Drama channel id(s), comma separated, e.g. -1001234567890,-1009876543210

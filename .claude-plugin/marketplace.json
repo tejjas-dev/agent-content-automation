@@ -1,0 +1,7 @@
+{
+  "name": "devx",
+  "owner": {"name": "DevelX"},
+  "plugins": [
+    {"name": "devx-content", "source": "./", "description": "Drama/movie/anime posting pipeline skills for Telegram."}
+  ]
+}
