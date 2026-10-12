@@ -31,19 +31,32 @@ def squash(s):
     return re.sub(r"\W+", "", s.lower())
 
 
+def jload(path):
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def tload(path):
+    with open(path, encoding="utf-8") as fh:
+        return fh.read()
+
+
 def run(task, title, typ="drama"):
     errs = []
     try:
-        data = json.load(open(os.path.join(task, "data.json"), encoding="utf-8"))
-        short = json.load(open(os.path.join(task, "short.json"), encoding="utf-8"))
+        data = jload(os.path.join(task, "data.json"))
+        short = jload(os.path.join(task, "short.json"))
     except Exception as e:  # noqa: BLE001
         return [f"cannot read data.json/short.json ({type(e).__name__})"]
     if not data.get("title"):
         errs.append("title missing in data.json")
     elif SequenceMatcher(None, squash(title), squash(data["title"])).ratio() < 0.6 and squash(title) not in squash(data["title"]):
         errs.append(f"title '{data['title']}' does not match requested '{title}'")
-    if not str(data.get("poster", "")).startswith("https://"):
+    poster = str(data.get("poster", ""))
+    if not poster.startswith("https://"):
         errs.append("poster missing or not https")
+    elif re.search(r"\s", poster) or not re.match(r"https://[^/\s]+\.[^/\s]+", poster):
+        errs.append("poster URL is malformed (spaces must be %20, host needed)")
     want = {s["short"]: norm(s["label"]) for s in short if s.get("short")}
     if not want:
         errs.append("no shortened links")
@@ -52,7 +65,7 @@ def run(task, title, typ="drama"):
         errs.append("no caption files")
     heads, counts, used = [], [], []
     for f in caps:
-        t, tag = open(f, encoding="utf-8").read(), os.path.basename(f)
+        t, tag = tload(f), os.path.basename(f)
         lines = t.split("\n")
         if units(t) > LIMIT:
             errs.append(f"{tag}: too long ({units(t)} units, max {LIMIT})")

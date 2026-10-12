@@ -14,3 +14,4 @@ It checks: title matches the request, poster is https, header equals data.json, 
 - `FAIL`: fix only the listed problems (rerun build.py or correct the data), then run `publish.py` ONE more time. Still failing -> `Post format nahi ban paya: <first problem>.` and do not send.
 - Also confirm by eye that `data.json` is the drama (and season/year) the user asked for, from this run's live page. Doubt -> do not send.
 - No extra checks or loops: one run, at most one retry.
+- If check.py itself breaks: do not edit it in place; verify by hand against the rules above, then follow drama-post "Self-improve" (draft).
