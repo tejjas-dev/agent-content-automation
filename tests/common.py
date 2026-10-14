@@ -28,6 +28,7 @@ def load(skill, name):
 
 class S:                       # shared fake-server state
     calls, messages, fail_chats, reject_url, short_fail, short_hits = [], [], set(), False, set(), []
+    short_body, short_status, timeout_chats = "", 200, set()      # short_body: text returned for a failing shorten call
 
 
 class H(BaseHTTPRequestHandler):
@@ -43,7 +44,7 @@ class H(BaseHTTPRequestHandler):
         if u.path == "/api":
             url = q.get("url", [""])[0]; S.short_hits.append(url)
             if url in S.short_fail or q.get("api", [""])[0] != "AROTOK":
-                return self._s(200, "", "text/plain")
+                return self._s(S.short_status, S.short_body, "text/plain")
             return self._s(200, "https://arolinks.com/" + hashlib.sha1(url.encode()).hexdigest()[:7], "text/plain")
         if u.path == "/p.png":
             return self._s(200, PNG, "image/png")
@@ -51,6 +52,17 @@ class H(BaseHTTPRequestHandler):
             return self._s(200, "<html><head><title>Hello Page</title></head><body>" + "x" * 300 + "</body></html>", "text/html")
         if u.path == "/blocked":
             return self._s(403, "<html><title>Just a moment...</title></html>", "text/html")
+        if u.path == "/ok":
+            return self._s(200, "<html>ok</html>", "text/html")
+        if u.path == "/guard":
+            return self._s(403, "<html><title>Just a moment...</title></html>", "text/html")
+        if u.path == "/hop":                         # redirects to ANOTHER host name (localhost vs 127.0.0.1)
+            self.send_response(302); self.send_header("Location", f"http://localhost:{self.server.server_address[1]}/ok")
+            self.send_header("Content-Length", "0"); self.end_headers(); return
+        if u.path == "/shell":
+            return self._s(200, "<html><head><title>Home</title></head><body><h1>Search Results</h1><p>Loading...</p></body></html>" + " " * 300, "text/html")
+        if u.path == "/slow-503":
+            S.calls.append(("fetch", "503")); return self._s(503, "x", "text/html")
         self._s(404, "nope")
 
     def do_POST(self):
@@ -63,6 +75,8 @@ class H(BaseHTTPRequestHandler):
         else:
             chat = parse_qs(body.decode())["chat_id"][0]; mode = "url"
         S.calls.append((chat, mode))
+        if chat in S.timeout_chats:
+            import time as _t; _t.sleep(3); return self._s(200, json.dumps({"ok": True}))
         if chat in S.fail_chats:
             return self._s(400, json.dumps({"ok": False, "description": "Bad Request: chat not found"}))
         if mode == "url" and S.reject_url:
@@ -90,11 +104,15 @@ class Base(unittest.TestCase):
         (self.root / "state").mkdir()
         env = {"DEVX_DATA_DIR": str(self.data), "AROLINKS_TOKEN": "AROTOK", "TELEGRAM_BOT_TOKEN": "TGTOK",
                "DRAMA_POST_CHANNEL_IDS": "-1,-2", "DEVX_AROLINKS_API": self.base + "/api",
-               "DEVX_TELEGRAM_API": self.base, "DEVX_SEND_DELAY": "0", "DEVX_RETRY_CAP": "0"}
-        self._old = {k: os.environ.get(k) for k in [*env, "DEVX_NOTIFY_CHAT_ID", "DEVX_RUNNER_STALE"]}
-        os.environ.pop("DEVX_NOTIFY_CHAT_ID", None); os.environ.pop("DEVX_RUNNER_STALE", None)
+               "DEVX_TELEGRAM_API": self.base, "DEVX_SEND_DELAY": "0", "DEVX_RETRY_CAP": "0", "DEVX_BACKOFF": "0"}
+        # every DEVX_* / token variable is restored after the test, so one test's setting never leaks into the next
+        keys = {*env, *(k for k in os.environ if k.startswith("DEVX_"))}
+        self._old = {k: os.environ.get(k) for k in keys}
+        for k in keys:
+            os.environ.pop(k, None)
         os.environ.update(env)
         S.calls.clear(); S.messages.clear(); S.fail_chats.clear(); S.reject_url = False; S.short_fail.clear(); S.short_hits.clear()
+        S.short_body, S.short_status = "", 200; S.timeout_chats.clear()
 
     def tearDown(self):
         for k, v in self._old.items():

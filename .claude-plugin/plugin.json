@@ -1,6 +1,6 @@
 {
   "name": "devx-content",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "AI-driven content posting skills (drama now, movie/anime later): find, scrape, shorten, format, verify, send to Telegram.",
   "author": {"name": "DevelX"},
   "license": "MIT"

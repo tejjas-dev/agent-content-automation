@@ -25,4 +25,4 @@ It reads `data.json` + `short.json` and applies the locked layout (plain text, n
 - `[` `]` become `(` `)`. Blank line after the header and after every link. Max 12 links and <= 950 UTF-16 units per post, fewest posts, balanced (13 -> 7+6). Long labels are trimmed only when needed.
 - Exit 3 = no links, 4 = header too long (`Post format nahi ban paya: header bahut lamba hai.`).
 - Helpers: `scripts/measure.py plan <N>` (split sizes), `scripts/measure.py FILE...` (UTF-16 units).
-- If build.py itself breaks, fix it minimally (stdlib only), tell the user, suggest committing.
+- If build.py itself breaks: do not edit it in place. Finish this run by hand (same locked layout, `caption<N>.txt` in `$TASK`), then follow drama-post "Self-improve" (draft, stdlib only).

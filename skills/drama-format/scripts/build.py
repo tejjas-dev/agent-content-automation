@@ -46,8 +46,10 @@ def main(argv=None):
     ap.add_argument("--type", default="drama")
     a = ap.parse_args(argv)
     try:
-        data = json.load(open(os.path.join(a.task, "data.json"), encoding="utf-8"))
-        short = json.load(open(os.path.join(a.task, "short.json"), encoding="utf-8"))
+        with open(os.path.join(a.task, "data.json"), encoding="utf-8") as fh:
+            data = json.load(fh)
+        with open(os.path.join(a.task, "short.json"), encoding="utf-8") as fh:
+            short = json.load(fh)
     except Exception as e:  # noqa: BLE001
         print(f"ERROR cannot read data.json/short.json ({type(e).__name__})")
         return 2
@@ -63,7 +65,8 @@ def main(argv=None):
         if re.fullmatch(r"caption\d+\.txt", old):
             os.remove(os.path.join(a.task, old))
     for i, c in enumerate(caps, 1):
-        open(os.path.join(a.task, f"caption{i}.txt"), "w", encoding="utf-8").write(c)
+        with open(os.path.join(a.task, f"caption{i}.txt"), "w", encoding="utf-8") as fh:
+            fh.write(c)
     dropped = len(short) - len(items)
     print(f"built {len(caps)} post(s), {len(items)} link(s)" + (f", dropped {dropped} unshortened" if dropped else ""))
     return 0
